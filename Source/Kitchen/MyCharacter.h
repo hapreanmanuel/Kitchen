@@ -7,7 +7,7 @@
 
 //Enum used in the TMap which keeps the state of the drawer
 UENUM(BlueprintType)
-enum class EDrawerState : uint8
+enum class EAssetState : uint8
 {
 	Closed UMETA(DisplayName = "Closed"),
 	Open UMETA(DisplayName = "Open"),
@@ -52,9 +52,20 @@ public:
 	//Parameters for the ray trace
 	FCollisionQueryParams TraceParams;
 
-	//TMap which keeps the open/closed state for our drawers
-	TMap<AActor*, AMyCharacter::EDrawerState> DrawerStateMap;
+	//TMap which keeps the open/closed state for our island drawers
+	TMap<AActor*, AMyCharacter::EAssetState> AssetStateMap;
 
+	//Function to return a string out of the enum type
+	template<typename TEnum>
+	static FORCEINLINE FString GetEnumValueToString(const FString& Name, TEnum Value)
+	{
+		const UEnum* enumPtr = FindObject<UEnum>(ANY_PACKAGE, *Name, true);
+		if (!enumPtr)
+		{
+			return FString("Invalid");
+		}
+		return enumPtr->GetEnumName((int32)Value);
+	}
 
 protected:
 	/** Base turn rate, in deg/sec. Other scaling may affect final turn rate. */

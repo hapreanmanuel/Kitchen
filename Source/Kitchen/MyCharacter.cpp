@@ -37,7 +37,7 @@ AMyCharacter::AMyCharacter()
 	Mesh1P->RelativeLocation = FVector(-0.5f, -4.4f, -155.7f);
 
 	//Set the value of the applied force
-	AppliedForce = FVector(1000, 0, 0);
+	AppliedForce = FVector(1000, 1000, 1000);
 
 	//Initialize TraceParams parameter
 	TraceParams = FCollisionQueryParams(FName(TEXT("Trace")), true, this);
@@ -62,13 +62,17 @@ void AMyCharacter::BeginPlay()
 		//UE_LOG(LogTemp, Warning, TEXT("Actor name: %s"), *ActorIt->GetName());
 
 		//Finds the actors for the Handles, used to set the initial state of our drawers to closed 
-		if (ActorIt->GetName().EndsWith("Handle"))
+		if (ActorIt->GetName().Contains("Handle"))
 		{
 			GetStaticMesh(ActorIt->GetComponents());
+
 			if (SelectedObjectMesh != nullptr)
 			{
-				SelectedObjectMesh->AddImpulse(FVector(-6000, 0, 0));
-				DrawerStateMap.Add(ActorIt->GetAttachParentActor(), EDrawerState::Closed);
+				if (!ActorIt->GetName().Contains("Door"))
+				{
+					SelectedObjectMesh->AddImpulse(-6 * AppliedForce * ActorIt->GetActorForwardVector());
+				}
+				AssetStateMap.Add(ActorIt->GetAttachParentActor(), EAssetState::Closed);
 			}
 		}
 	}
@@ -80,8 +84,7 @@ void AMyCharacter::GetStaticMesh(TSet<UActorComponent*> Components)
 {
 	for (auto Component : Components)
 	{
-		//UE_LOG(LogTemp, Warning, TEXT("Component name: %s"), *Component->GetName());
-		if (Component->GetName().Equals("StaticMeshComponent0"))
+		if (Component->GetName().Contains("StaticMeshComponent"))
 		{
 			SelectedObjectMesh = Cast<UStaticMeshComponent>(Component);
 			break;
@@ -120,7 +123,7 @@ void AMyCharacter::MoveForward(const float Value)
 {
 	if ((Controller != nullptr) && (Value != 0.0f))
 	{
-		// find out which way is forward
+		// Find out which way is forward
 		FRotator Rotation = Controller->GetControlRotation();
 		// Limit pitch when walking or falling
 		if (GetCharacterMovement()->IsMovingOnGround() || GetCharacterMovement()->IsFalling())
@@ -142,8 +145,6 @@ void AMyCharacter::MoveRight(const float Value)
 		const FVector Direction = FRotationMatrix(Rotation).GetScaledAxis(EAxis::Y);
 		// add movement in that direction
 		AddMovementInput(Direction, Value *0.5);
-
-		//UE_LOG(LogTemp, Warning, TEXT("Should move right/left "));
 	}
 }
 
@@ -160,40 +161,35 @@ void AMyCharacter::Click()
 
 	if (HitObject.bBlockingHit)
 	{
-		//UE_LOG(LogTemp, Warning, TEXT("I just hit : %s "), *HitObject.GetActor()->GetName());
-		
-		//Selects the drawer if we clicked on one, or it's handle
-		if (HitObject.GetActor()->GetName().StartsWith("IslandDrawer"))
+		//Selects the interractive asset that has been clicked on
+		if (HitObject.GetActor()->GetName().Contains("Handle"))
 		{
-			if (HitObject.GetActor()->GetName().EndsWith("Handle"))
-			{
-				SelectedObject = HitObject.GetActor()->GetAttachParentActor();
-			}
-			else
-			{
-				SelectedObject = HitObject.GetActor();
-			}
+			SelectedObject = HitObject.GetActor()->GetAttachParentActor();
 		}
 		else
 		{
-			SelectedObject = nullptr;
+			SelectedObject = HitObject.GetActor();
 		}
 
-		//Add force to open/close the selected drawer and update it's state in the TMap
-		if (DrawerStateMap.Contains(SelectedObject))
+		//Add force to open/close the selected asset and update it's state in the TMap
+		if (AssetStateMap.Contains(SelectedObject))
 		{
 			GetStaticMesh(SelectedObject->GetComponents());
+			
+			if (AssetStateMap.FindRef(SelectedObject) == EAssetState::Closed)
+			{
+				SelectedObjectMesh->AddImpulse(AppliedForce * SelectedObject->GetActorForwardVector());
+				AssetStateMap.Add(SelectedObject, EAssetState::Open);
+			}
+			else if (AssetStateMap.FindRef(SelectedObject) == EAssetState::Open)
+			{
+				SelectedObjectMesh->AddImpulse(-AppliedForce * SelectedObject->GetActorForwardVector());
+				AssetStateMap.Add(SelectedObject, EAssetState::Closed);
+			}
 
-			if (DrawerStateMap.FindRef(SelectedObject) == EDrawerState::Closed)
-			{
-				SelectedObjectMesh->AddImpulse(AppliedForce);
-				DrawerStateMap.Add(SelectedObject, EDrawerState::Open);
-			}
-			else if (DrawerStateMap.FindRef(SelectedObject) == EDrawerState::Open)
-			{
-				SelectedObjectMesh->AddImpulse(-AppliedForce);
-				DrawerStateMap.Add(SelectedObject, EDrawerState::Closed);
-			}
+			FString TestString = AMyCharacter::GetEnumValueToString<EAssetState>("EAssetState", AssetStateMap.FindRef(SelectedObject));
+			UE_LOG(LogTemp, Warning, TEXT("Asset : %s  Is now : %s"), *SelectedObject->GetName(), *TestString);
+
 		}
 	}
 }
