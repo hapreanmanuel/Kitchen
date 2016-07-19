@@ -2,8 +2,6 @@
 
 #pragma once
 
-#include "GameFramework/Character.h"
-#include "MyCharacter.generated.h"
 
 //Enum used in the TMap which keeps the state of the drawer
 UENUM(BlueprintType)
@@ -11,8 +9,13 @@ enum class EAssetState : uint8
 {
 	Closed UMETA(DisplayName = "Closed"),
 	Open UMETA(DisplayName = "Open"),
-	Unkown UMETA(DisplayName= "Unkown")
+	Unkown UMETA(DisplayName = "Unkown")
 };
+
+#include "GameFramework/Character.h"
+#include "MyCharacter.generated.h"
+
+
 
 UCLASS()
 class KITCHEN_API AMyCharacter : public ACharacter
@@ -53,7 +56,7 @@ public:
 	FCollisionQueryParams TraceParams;
 
 	//TMap which keeps the open/closed state for our island drawers
-	TMap<AActor*, AMyCharacter::EAssetState> AssetStateMap;
+	TMap<AActor*, EAssetState> AssetStateMap;
 
 	//Function to return a string out of the enum type
 	template<typename TEnum>

@@ -106,15 +106,15 @@ void AMyCharacter::SetupPlayerInputComponent(class UInputComponent* InputCompone
 {
 	Super::SetupPlayerInputComponent(InputComponent);
 
-	// Default Camera view bindings
+	//// Default Camera view bindings
 	InputComponent->BindAxis("LookUp", this, &AMyCharacter::AddControllerPitchInput);
 	InputComponent->BindAxis("Turn", this, &AMyCharacter::AddControllerYawInput);
 
-	// Respond every frame to the values of our two movement axes, "MoveX" and "MoveY".
+	//// Respond every frame to the values of our two movement axes, "MoveX" and "MoveY".
 	InputComponent->BindAxis("MoveForward", this, &AMyCharacter::MoveForward);
 	InputComponent->BindAxis("MoveRight", this, &AMyCharacter::MoveRight);
 
-	//Set up the input from the mouse
+	////Set up the input from the mouse
 	InputComponent->BindAction("Click", IE_Pressed,this, &AMyCharacter::Click);
 
 }
@@ -187,8 +187,8 @@ void AMyCharacter::Click()
 				AssetStateMap.Add(SelectedObject, EAssetState::Closed);
 			}
 
-			FString TestString = AMyCharacter::GetEnumValueToString<EAssetState>("EAssetState", AssetStateMap.FindRef(SelectedObject));
-			UE_LOG(LogTemp, Warning, TEXT("Asset : %s  Is now : %s"), *SelectedObject->GetName(), *TestString);
+			//FString TestString = AMyCharacter::GetEnumValueToString<EAssetState>("EAssetState", AssetStateMap.FindRef(SelectedObject));
+			//UE_LOG(LogTemp, Warning, TEXT("Asset : %s  Is now : %s"), *SelectedObject->GetName(), *TestString);
 
 		}
 	}
