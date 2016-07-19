@@ -27,14 +27,12 @@ AMyCharacter::AMyCharacter()
 	MyCharacterCamera->RelativeLocation = FVector(0.f, 0.f, 64.f); // Position the camera
 	MyCharacterCamera->bUsePawnControlRotation = true;
 
-	// Create a mesh component that will be used when being viewed from a '1st person' view (when controlling this pawn)
-	Mesh1P = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("CharacterMesh1P"));
-	Mesh1P->SetOnlyOwnerSee(true);
-	Mesh1P->SetupAttachment(MyCharacterCamera);
-	Mesh1P->bCastDynamicShadow = false;
-	Mesh1P->CastShadow = false;
-	Mesh1P->RelativeRotation = FRotator(1.9f, -19.19f, 5.2f);
-	Mesh1P->RelativeLocation = FVector(-0.5f, -4.4f, -155.7f);
+	//Create the Spring Arm component
+	SpringArm = CreateDefaultSubobject<USpringArmComponent>(TEXT("MyCharacterArm"));
+	SpringArm->SetupAttachment(GetCapsuleComponent());
+	SpringArm->SetRelativeLocation(FVector(0.f, 0.f, 64.f));
+	SpringArm->bUsePawnControlRotation = true;
+	SpringArm->TargetArmLength = 0;
 
 	//Set the value of the applied force
 	AppliedForce = FVector(1000, 1000, 1000);
@@ -45,6 +43,11 @@ AMyCharacter::AMyCharacter()
 	TraceParams.bTraceAsyncScene = true;
 	TraceParams.bReturnPhysicalMaterial = false;
 
+	//At the begining of the game we are not holding any item
+	bIsHoldingItem = false;
+
+	//Set the maximum grasping length
+	MaxGraspLength = 300;
 }
 
 // Called when the game starts or when spawned
@@ -74,6 +77,12 @@ void AMyCharacter::BeginPlay()
 				}
 				AssetStateMap.Add(ActorIt->GetAttachParentActor(), EAssetState::Closed);
 			}
+		}
+		//Remember to tag items when adding them into the world
+		//Or CREATE a function which does that automatically
+		else if (ActorIt->ActorHasTag(FName(TEXT("Item"))))
+		{
+			ItemMap.Add(ActorIt, EItemType::GeneralItem);
 		}
 	}
 }
@@ -159,7 +168,18 @@ void AMyCharacter::Click()
 
 	GetWorld()->LineTraceSingleByChannel(HitObject, Start, End, ECC_Pawn, TraceParams);
 
-	if (HitObject.bBlockingHit)
+	//Logic for releasing an item
+	if (bIsHoldingItem)
+	{
+		bIsHoldingItem = false;
+
+		SelectedObjectMesh->SetSimulatePhysics(true);
+		SelectedObjectMesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+		SelectedObjectMesh->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform);
+	}
+
+	//Case in which we have clicked on an asset and are not currently holding one
+	else if (HitObject.bBlockingHit)
 	{
 		//Selects the interractive asset that has been clicked on
 		if (HitObject.GetActor()->GetName().Contains("Handle"))
@@ -189,7 +209,21 @@ void AMyCharacter::Click()
 
 			//FString TestString = AMyCharacter::GetEnumValueToString<EAssetState>("EAssetState", AssetStateMap.FindRef(SelectedObject));
 			//UE_LOG(LogTemp, Warning, TEXT("Asset : %s  Is now : %s"), *SelectedObject->GetName(), *TestString);
-
+		}
+		//Logic when picking (selecting) an item
+		else if (ItemMap.Contains(SelectedObject))
+		{
+			//Check if the object is within the hand's range
+			if (HitObject.Distance < MaxGraspLength)
+			{
+				GetStaticMesh(SelectedObject->GetComponents());
+				bIsHoldingItem = true;
+				SelectedObjectMesh->SetSimulatePhysics(false);
+				SelectedObjectMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+				SelectedObjectMesh->AttachToComponent(SpringArm, FAttachmentTransformRules::KeepWorldTransform);
+			}
+			//FString TestString = AMyCharacter::GetEnumValueToString<EItemType>("EItemType", ItemMap.FindRef(SelectedObject));
+			//UE_LOG(LogTemp, Warning, TEXT("Asset : %s  Is a : %s and the distance is : %f "), *SelectedObject->GetName(), *TestString, HitObject.Distance);
 		}
 	}
 }

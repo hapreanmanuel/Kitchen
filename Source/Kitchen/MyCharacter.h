@@ -12,6 +12,15 @@ enum class EAssetState : uint8
 	Unkown UMETA(DisplayName = "Unkown")
 };
 
+//Enum used when mapping the items
+UENUM(BlueprintType)
+enum class EItemType : uint8
+{
+	GeneralItem UMETA(DisplayName = "GeneralItem"),
+	Cup UMETA(DisplayName = "Cup"),
+	Plate UMETA(DisplayName = "Plate")
+};
+
 #include "GameFramework/Character.h"
 #include "MyCharacter.generated.h"
 
@@ -39,6 +48,9 @@ public:
 	UPROPERTY(EditAnywhere)
 	class UCameraComponent* MyCharacterCamera;
 
+	//Spring arm component used for grasping objects
+	USpringArmComponent* SpringArm;
+
 	//Array to store all actors in the world; used to find which object is selected
 	TArray<AActor*> AllActors;
 
@@ -55,8 +67,17 @@ public:
 	//Parameters for the ray trace
 	FCollisionQueryParams TraceParams;
 
+	//Boolean to store whether or not we are currently holding an item
+	bool bIsHoldingItem;
+
+	//Variable for maximum grasping length
+	float MaxGraspLength;
+
 	//TMap which keeps the open/closed state for our island drawers
 	TMap<AActor*, EAssetState> AssetStateMap;
+
+	//TMap which keeps the interractive items from the kitchen
+	TMap<AActor*, EItemType> ItemMap;
 
 	//Function to return a string out of the enum type
 	template<typename TEnum>
@@ -88,17 +109,11 @@ protected:
 	//Handles the input from the mouse
 	void Click();
 
-	/** Pawn mesh: 1st person view (arms; seen only by self) */
-	UPROPERTY(VisibleDefaultsOnly, Category = Mesh)
-	class USkeletalMeshComponent* Mesh1P;
-
 	//Function which returns the static mesh component of the selected object; NOT efficient --> Look for alternatives
 	void GetStaticMesh(TSet<UActorComponent*> Components);
 	
 
 public:
-	/** Returns Mesh1P subobject **/
-	FORCEINLINE class USkeletalMeshComponent* GetMesh1P() const { return Mesh1P; }
 	/** Returns FirstPersonCameraComponent subobject **/
 	FORCEINLINE class UCameraComponent* GetMyCharacterCamera() const { return MyCharacterCamera; }
 	
