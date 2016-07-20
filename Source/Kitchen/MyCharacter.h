@@ -18,7 +18,11 @@ enum class EItemType : uint8
 {
 	GeneralItem UMETA(DisplayName = "GeneralItem"),
 	Cup UMETA(DisplayName = "Cup"),
-	Plate UMETA(DisplayName = "Plate")
+	Plate UMETA(DisplayName = "Plate"),
+	Mug	UMETA(DisplayName = "Plate"),
+	Pan UMETA(DisplayName = "Plate"),
+	Spatula UMETA(DisplayName = "Plate"),
+	Spoon UMETA(DisplayName = "Plate")
 };
 
 #include "GameFramework/Character.h"
@@ -73,6 +77,12 @@ public:
 	//Variable for maximum grasping length
 	float MaxGraspLength;
 
+	//Variable for current grasp length
+	float HeldItemDistance;
+
+	//Variable for maximum arm stretch
+	float MaxArmStretch;
+
 	//TMap which keeps the open/closed state for our island drawers
 	TMap<AActor*, EAssetState> AssetStateMap;
 
@@ -108,6 +118,9 @@ protected:
 
 	//Handles the input from the mouse
 	void Click();
+
+	//Handles arm movement for bringing objects closer or further
+	void MoveArm(const float Value);
 
 	//Function which returns the static mesh component of the selected object; NOT efficient --> Look for alternatives
 	void GetStaticMesh(TSet<UActorComponent*> Components);

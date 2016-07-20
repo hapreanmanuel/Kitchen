@@ -32,7 +32,7 @@ AMyCharacter::AMyCharacter()
 	SpringArm->SetupAttachment(GetCapsuleComponent());
 	SpringArm->SetRelativeLocation(FVector(0.f, 0.f, 64.f));
 	SpringArm->bUsePawnControlRotation = true;
-	SpringArm->TargetArmLength = 0;
+	SpringArm->TargetArmLength = 0.f;
 
 	//Set the value of the applied force
 	AppliedForce = FVector(1000, 1000, 1000);
@@ -47,7 +47,10 @@ AMyCharacter::AMyCharacter()
 	bIsHoldingItem = false;
 
 	//Set the maximum grasping length
-	MaxGraspLength = 300;
+	MaxGraspLength = 150;
+
+	//Set the maximum arm stretch distance
+	MaxArmStretch = 25;
 }
 
 // Called when the game starts or when spawned
@@ -126,6 +129,9 @@ void AMyCharacter::SetupPlayerInputComponent(class UInputComponent* InputCompone
 	////Set up the input from the mouse
 	InputComponent->BindAction("Click", IE_Pressed,this, &AMyCharacter::Click);
 
+	////Set up input from the wheel
+	InputComponent->BindAxis("MoveArm", this, &AMyCharacter::MoveArm);
+
 }
 
 void AMyCharacter::MoveForward(const float Value)
@@ -157,6 +163,19 @@ void AMyCharacter::MoveRight(const float Value)
 	}
 }
 
+void AMyCharacter::MoveArm(const float Value)
+{
+	if ((Controller != nullptr) && (Value != 0.0f) && bIsHoldingItem)
+	{
+		if (((Value < 0.0f) && (SpringArm->TargetArmLength > -MaxArmStretch)) || ((Value > 0.0f) && (SpringArm->TargetArmLength < MaxArmStretch)))
+		{
+			//Move object closer or further
+			SpringArm->TargetArmLength += Value*5;
+			//UE_LOG(LogTemp, Warning, TEXT("Spring arm stretched for : %f and the input Value is : %f"), SpringArm->TargetArmLength, Value);
+		}
+	}
+}
+
 void AMyCharacter::Click()
 {
 	//UE_LOG(LogTemp, Warning, TEXT("Button Pressed : Left mouse button!"));
@@ -173,6 +192,7 @@ void AMyCharacter::Click()
 	{
 		bIsHoldingItem = false;
 
+		SpringArm->TargetArmLength = 0;
 		SelectedObjectMesh->SetSimulatePhysics(true);
 		SelectedObjectMesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 		SelectedObjectMesh->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform);
@@ -218,6 +238,7 @@ void AMyCharacter::Click()
 			{
 				GetStaticMesh(SelectedObject->GetComponents());
 				bIsHoldingItem = true;
+				HeldItemDistance = HitObject.Distance;
 				SelectedObjectMesh->SetSimulatePhysics(false);
 				SelectedObjectMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 				SelectedObjectMesh->AttachToComponent(SpringArm, FAttachmentTransformRules::KeepWorldTransform);
