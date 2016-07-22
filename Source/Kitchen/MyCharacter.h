@@ -52,9 +52,6 @@ public:
 	UPROPERTY(EditAnywhere)
 	class UCameraComponent* MyCharacterCamera;
 
-	//Spring arm component used for grasping objects
-	USpringArmComponent* SpringArm;
-
 	//Array to store all actors in the world; used to find which object is selected
 	TArray<AActor*> AllActors;
 
@@ -71,17 +68,27 @@ public:
 	//Parameters for the ray trace
 	FCollisionQueryParams TraceParams;
 
-	//Boolean to store whether or not we are currently holding an item
-	bool bIsHoldingItem;
-
 	//Variable for maximum grasping length
 	float MaxGraspLength;
 
-	//Variable for current grasp length
-	float HeldItemDistance;
+	//Variable storing which hand should perform the next action
+	bool bRightHandSelected;
 
-	//Variable for maximum arm stretch
-	float MaxArmStretch;
+	//Pointer to the item held in the right hand
+	AActor* RightHandSlot;
+
+	//Pointer to the item held in the left hand
+	AActor* LeftHandSlot;
+
+	//Vectors used for getting the offset needed when placing an item on a surface
+	FVector Min;
+	FVector Max;
+
+	//Function to pick an item in one of our hands
+	void PickToInventory(AActor* CurrentObject);
+
+	//Function to release the currently held item
+	void DropFromInventory(AActor* CurrentObject, FHitResult HitSurface);
 
 	//TMap which keeps the open/closed state for our island drawers
 	TMap<AActor*, EAssetState> AssetStateMap;
@@ -119,8 +126,8 @@ protected:
 	//Handles the input from the mouse
 	void Click();
 
-	//Handles arm movement for bringing objects closer or further
-	void MoveArm(const float Value);
+	//Switches between which hand will perform the next action
+	void SwitchSelectedHand();
 
 	//Function which returns the static mesh component of the selected object; NOT efficient --> Look for alternatives
 	void GetStaticMesh(TSet<UActorComponent*> Components);

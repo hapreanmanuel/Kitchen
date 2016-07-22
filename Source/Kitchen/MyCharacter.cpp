@@ -27,13 +27,6 @@ AMyCharacter::AMyCharacter()
 	MyCharacterCamera->RelativeLocation = FVector(0.f, 0.f, 64.f); // Position the camera
 	MyCharacterCamera->bUsePawnControlRotation = true;
 
-	//Create the Spring Arm component
-	SpringArm = CreateDefaultSubobject<USpringArmComponent>(TEXT("MyCharacterArm"));
-	SpringArm->SetupAttachment(GetCapsuleComponent());
-	SpringArm->SetRelativeLocation(FVector(0.f, 0.f, 64.f));
-	SpringArm->bUsePawnControlRotation = true;
-	SpringArm->TargetArmLength = 0.f;
-
 	//Set the value of the applied force
 	AppliedForce = FVector(1000, 1000, 1000);
 
@@ -43,14 +36,16 @@ AMyCharacter::AMyCharacter()
 	TraceParams.bTraceAsyncScene = true;
 	TraceParams.bReturnPhysicalMaterial = false;
 
-	//At the begining of the game we are not holding any item
-	bIsHoldingItem = false;
-
 	//Set the maximum grasping length
-	MaxGraspLength = 150;
+	MaxGraspLength = 300;
 
-	//Set the maximum arm stretch distance
-	MaxArmStretch = 25;
+	//Set the pointers to the items held in hands to null at the begining of the game
+	LeftHandSlot = nullptr;
+	RightHandSlot = nullptr;
+
+	//By default our character will perfom actions with the right hand first
+	bRightHandSelected = true;
+
 }
 
 // Called when the game starts or when spawned
@@ -129,9 +124,8 @@ void AMyCharacter::SetupPlayerInputComponent(class UInputComponent* InputCompone
 	////Set up the input from the mouse
 	InputComponent->BindAction("Click", IE_Pressed,this, &AMyCharacter::Click);
 
-	////Set up input from the wheel
-	InputComponent->BindAxis("MoveArm", this, &AMyCharacter::MoveArm);
-
+	////Input from the tab button which switches selected hand
+	InputComponent->BindAction("SwitchSelectedHand", IE_Pressed, this, &AMyCharacter::SwitchSelectedHand);
 }
 
 void AMyCharacter::MoveForward(const float Value)
@@ -163,23 +157,23 @@ void AMyCharacter::MoveRight(const float Value)
 	}
 }
 
-void AMyCharacter::MoveArm(const float Value)
+void AMyCharacter::SwitchSelectedHand()
 {
-	if ((Controller != nullptr) && (Value != 0.0f) && bIsHoldingItem)
+	bRightHandSelected = !bRightHandSelected;
+	if (bRightHandSelected)
 	{
-		if (((Value < 0.0f) && (SpringArm->TargetArmLength > -MaxArmStretch)) || ((Value > 0.0f) && (SpringArm->TargetArmLength < MaxArmStretch)))
-		{
-			//Move object closer or further
-			SpringArm->TargetArmLength += Value*5;
-			//UE_LOG(LogTemp, Warning, TEXT("Spring arm stretched for : %f and the input Value is : %f"), SpringArm->TargetArmLength, Value);
-		}
+		SelectedObject = RightHandSlot;
+		UE_LOG(LogTemp, Warning, TEXT("Our character will perform the next action with his RIGHT hand"));
+	}
+	else
+	{
+		SelectedObject = LeftHandSlot;
+		UE_LOG(LogTemp, Warning, TEXT("Our character will perform the next action with his LEFT hand"));
 	}
 }
 
 void AMyCharacter::Click()
 {
-	//UE_LOG(LogTemp, Warning, TEXT("Button Pressed : Left mouse button!"));
-
 	FVector Start = MyCharacterCamera->GetComponentLocation();
 	FVector End = Start + MyCharacterCamera->GetForwardVector()*1000.0f;
 
@@ -187,35 +181,49 @@ void AMyCharacter::Click()
 
 	GetWorld()->LineTraceSingleByChannel(HitObject, Start, End, ECC_Pawn, TraceParams);
 
-	//Logic for releasing an item
-	if (bIsHoldingItem)
+	//Check if player clicked on a valid zone, if not exit the function call
+	if (!HitObject.bBlockingHit)
 	{
-		bIsHoldingItem = false;
-
-		SpringArm->TargetArmLength = 0;
-		SelectedObjectMesh->SetSimulatePhysics(true);
-		SelectedObjectMesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-		SelectedObjectMesh->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform);
+		UE_LOG(LogTemp, Warning, TEXT("Not a valid action!"));
+		return;
 	}
 
-	//Case in which we have clicked on an asset and are not currently holding one
-	else if (HitObject.bBlockingHit)
+	//Check if the object to interact with is not too far away
+	if (HitObject.Distance > MaxGraspLength)
 	{
-		//Selects the interractive asset that has been clicked on
+		UE_LOG(LogTemp, Warning, TEXT("Target is too far away!"));
+		return;
+	}
+
+	//Behaviour when we want to drop the item currently held in hand
+	if (SelectedObject)
+	{
+		//Drops our currently selected item on the surface clicked on
+		DropFromInventory(SelectedObject, HitObject);
+
+		//Remove the reference to the selected object
+		SelectedObject = nullptr;
+	}
+
+	//Behaviour when wanting to grab an item or opening/closing actions
+	else
+	{
+		//Check if the player has clicked on a handle
 		if (HitObject.GetActor()->GetName().Contains("Handle"))
 		{
 			SelectedObject = HitObject.GetActor()->GetAttachParentActor();
 		}
+		//Select the object that has been clicked on, or the parent in case it's a handle
 		else
 		{
 			SelectedObject = HitObject.GetActor();
 		}
 
-		//Add force to open/close the selected asset and update it's state in the TMap
+		//Section for assets which can be opened or closed
 		if (AssetStateMap.Contains(SelectedObject))
 		{
 			GetStaticMesh(SelectedObject->GetComponents());
-			
+
 			if (AssetStateMap.FindRef(SelectedObject) == EAssetState::Closed)
 			{
 				SelectedObjectMesh->AddImpulse(AppliedForce * SelectedObject->GetActorForwardVector());
@@ -226,28 +234,83 @@ void AMyCharacter::Click()
 				SelectedObjectMesh->AddImpulse(-AppliedForce * SelectedObject->GetActorForwardVector());
 				AssetStateMap.Add(SelectedObject, EAssetState::Closed);
 			}
-
-			//FString TestString = AMyCharacter::GetEnumValueToString<EAssetState>("EAssetState", AssetStateMap.FindRef(SelectedObject));
-			//UE_LOG(LogTemp, Warning, TEXT("Asset : %s  Is now : %s"), *SelectedObject->GetName(), *TestString);
+			SelectedObject = nullptr;
+			return;
 		}
-		//Logic when picking (selecting) an item
+
+		//Section for items that can be picked up and moved around
 		else if (ItemMap.Contains(SelectedObject))
 		{
-			//Check if the object is within the hand's range
-			if (HitObject.Distance < MaxGraspLength)
-			{
-				GetStaticMesh(SelectedObject->GetComponents());
-				bIsHoldingItem = true;
-				HeldItemDistance = HitObject.Distance;
-				SelectedObjectMesh->SetSimulatePhysics(false);
-				SelectedObjectMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-				SelectedObjectMesh->AttachToComponent(SpringArm, FAttachmentTransformRules::KeepWorldTransform);
-			}
-			//FString TestString = AMyCharacter::GetEnumValueToString<EItemType>("EItemType", ItemMap.FindRef(SelectedObject));
-			//UE_LOG(LogTemp, Warning, TEXT("Asset : %s  Is a : %s and the distance is : %f "), *SelectedObject->GetName(), *TestString, HitObject.Distance);
+			//Picks up the item selected
+			PickToInventory(SelectedObject);
+		}
+
+		//If the item can not pe opened nor moved, remove the reference from it
+		else
+		{
+			SelectedObject = nullptr;
 		}
 	}
 }
 
+//Function to pick an item in one of our hands
+void AMyCharacter::PickToInventory(AActor* CurrentObject)
+{
+	//Add a reference and an icon of the object in the correct item slot (left or right hand) 
+	if (bRightHandSelected)
+	{
+		RightHandSlot = CurrentObject;
 
+		/*	TODO
+		Add icon of the object in the inventory slot
+		*/
+	}
+	else
+	{
+		LeftHandSlot = CurrentObject;
+		/*	TODO
+		Add icon of the object in the inventory slot
+		*/
+	}
+
+	//Hide the object from the world
+	CurrentObject->SetActorHiddenInGame(true);
+}
+
+//Function to release the currently held item
+void AMyCharacter::DropFromInventory(AActor* CurrentObject, FHitResult HitSurface)
+{
+	//Set the item visible in the game again
+	CurrentObject->SetActorHiddenInGame(false);
+
+	//Selects the mesh of our object so that we can change it's position in the world
+	GetStaticMesh(CurrentObject->GetComponents());
+
+	//Find the bounding limits of the currently selected object 
+	SelectedObjectMesh->GetLocalBounds(Min, Max);
+
+	//Method to move the object to our newly selected position
+	SelectedObjectMesh->SetWorldLocation(HitSurface.Location - HitSurface.Normal*(Min *SelectedObjectMesh->GetComponentScale()));
+
+	//Remove the reference to the object because we are not holding it any more
+	if (bRightHandSelected)
+	{
+		RightHandSlot = nullptr;
+		/*	TODO
+		Remove icon of the object in the inventory slot
+		*/
+	}
+	else
+	{
+		LeftHandSlot = nullptr;
+		/*	TODO
+		Remove icon of the object in the inventory slot
+		*/
+	}
+}
+
+/*
+TODO
+Create an inventory!!!!
+*/
 
