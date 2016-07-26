@@ -48,54 +48,6 @@ public:
 	// Called to bind functionality to input
 	virtual void SetupPlayerInputComponent(class UInputComponent* InputComponent) override;
 
-	//Camera component for our character
-	UPROPERTY(EditAnywhere)
-	class UCameraComponent* MyCharacterCamera;
-
-	//Array to store all actors in the world; used to find which object is selected
-	TArray<AActor*> AllActors;
-
-	//Actor to select which object is to be manipulated 
-	UPROPERTY(EditAnywhere)
-	AActor* SelectedObject;
-
-	//Component of the selected object with physics behaviour
-	UStaticMeshComponent* SelectedObjectMesh;
-
-	// Input variable for the force applied on the selected object
-	FVector AppliedForce;
-
-	//Parameters for the ray trace
-	FCollisionQueryParams TraceParams;
-
-	//Variable for maximum grasping length
-	float MaxGraspLength;
-
-	//Variable storing which hand should perform the next action
-	bool bRightHandSelected;
-
-	//Pointer to the item held in the right hand
-	AActor* RightHandSlot;
-
-	//Pointer to the item held in the left hand
-	AActor* LeftHandSlot;
-
-	//Vectors used for getting the offset needed when placing an item on a surface
-	FVector Min;
-	FVector Max;
-
-	//Function to pick an item in one of our hands
-	void PickToInventory(AActor* CurrentObject);
-
-	//Function to release the currently held item
-	void DropFromInventory(AActor* CurrentObject, FHitResult HitSurface);
-
-	//TMap which keeps the open/closed state for our island drawers
-	TMap<AActor*, EAssetState> AssetStateMap;
-
-	//TMap which keeps the interractive items from the kitchen
-	TMap<AActor*, EItemType> ItemMap;
-
 	//Function to return a string out of the enum type
 	template<typename TEnum>
 	static FORCEINLINE FString GetEnumValueToString(const FString& Name, TEnum Value)
@@ -107,6 +59,54 @@ public:
 		}
 		return enumPtr->GetEnumName((int32)Value);
 	}
+
+	//Camera component for our character
+	UPROPERTY(EditAnywhere)
+	class UCameraComponent* MyCharacterCamera;
+
+	//Array to store all actors in the world; used to find which object is selected
+	TArray<AActor*> AllActors;
+
+	//TMap which keeps the open/closed state for our island drawers
+	TMap<AActor*, EAssetState> AssetStateMap;
+
+	//TMap which keeps the interractive items from the kitchen
+	TMap<AActor*, EItemType> ItemMap;
+
+	//Actor pointer for the item currently selected
+	AActor* SelectedObject;
+
+	//Actor currently focused
+	AActor* HighlightedActor;
+
+	//Pointer to the item held in the right hand
+	AActor* RightHandSlot;
+
+	//Pointer to the item held in the left hand
+	AActor* LeftHandSlot;
+
+	//Parameters for the ray trace
+	FCollisionQueryParams TraceParams;
+
+	//Vectors used in ray tracing
+	FVector Start;
+	FVector End;
+
+	//Line trace Hit Result 
+	FHitResult HitObject;
+
+	//Variable for maximum grasping length
+	float MaxGraspLength;
+
+	//Variable storing which hand should perform the next action
+	bool bRightHandSelected;
+
+	// Input variable for the force applied on the selected object
+	FVector AppliedForce;
+
+	//Vectors used for getting the size of an item
+	FVector Min;
+	FVector Max;
 
 protected:
 	/** Base turn rate, in deg/sec. Other scaling may affect final turn rate. */
@@ -130,9 +130,17 @@ protected:
 	void SwitchSelectedHand();
 
 	//Function which returns the static mesh component of the selected object; NOT efficient --> Look for alternatives
-	void GetStaticMesh(TSet<UActorComponent*> Components);
-	
+	UStaticMeshComponent* GetStaticMesh(AActor* Actor);
 
+	//Function to pick an item in one of our hands
+	void PickToInventory(AActor* CurrentObject);
+
+	//Function to release the currently held item
+	void DropFromInventory(AActor* CurrentObject, FHitResult HitSurface);
+
+	//Function to open / close drawers and doors
+	void OpenCloseAction(AActor* OpenableActor);
+	
 public:
 	/** Returns FirstPersonCameraComponent subobject **/
 	FORCEINLINE class UCameraComponent* GetMyCharacterCamera() const { return MyCharacterCamera; }

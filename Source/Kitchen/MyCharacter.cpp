@@ -5,7 +5,7 @@
 #include "GameFramework/InputSettings.h"
 
 
-// Sets default values
+// Constructor which initializez the character parameters
 AMyCharacter::AMyCharacter()
 {
  	// Set this character to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
@@ -65,13 +65,11 @@ void AMyCharacter::BeginPlay()
 		//Finds the actors for the Handles, used to set the initial state of our drawers to closed 
 		if (ActorIt->GetName().Contains("Handle"))
 		{
-			GetStaticMesh(ActorIt->GetComponents());
-
-			if (SelectedObjectMesh != nullptr)
+			if (GetStaticMesh(ActorIt) != nullptr)
 			{
 				if (!ActorIt->GetName().Contains("Door"))
 				{
-					SelectedObjectMesh->AddImpulse(-6 * AppliedForce * ActorIt->GetActorForwardVector());
+					GetStaticMesh(ActorIt)->AddImpulse(-6 * AppliedForce * ActorIt->GetActorForwardVector());
 				}
 				AssetStateMap.Add(ActorIt->GetAttachParentActor(), EAssetState::Closed);
 			}
@@ -85,17 +83,43 @@ void AMyCharacter::BeginPlay()
 	}
 }
 
-
-//Function which returns static mesh, used for physics manipulation
-void AMyCharacter::GetStaticMesh(TSet<UActorComponent*> Components)
+UStaticMeshComponent* AMyCharacter::GetStaticMesh(AActor* Actor)
 {
-	for (auto Component : Components)
+	for (auto Component : Actor->GetComponents())
 	{
 		if (Component->GetName().Contains("StaticMeshComponent"))
 		{
-			SelectedObjectMesh = Cast<UStaticMeshComponent>(Component);
-			break;
+			return Cast<UStaticMeshComponent>(Component);
 		}
+	}
+	return nullptr;
+}
+
+void AMyCharacter::OpenCloseAction(AActor* OpenableActor)
+{
+	if (OpenableActor->GetName().Contains("Handle"))
+	{
+		OpenableActor = OpenableActor->GetAttachParentActor();
+	}
+
+	if (!AssetStateMap.Contains(OpenableActor))
+	{
+		return;
+	}
+
+	else
+	{
+		if (AssetStateMap.FindRef(OpenableActor) == EAssetState::Closed)
+		{
+			GetStaticMesh(OpenableActor)->AddImpulse(AppliedForce * OpenableActor->GetActorForwardVector());
+			AssetStateMap.Add(OpenableActor, EAssetState::Open);
+		}
+		else if (AssetStateMap.FindRef(HighlightedActor) == EAssetState::Open)
+		{
+			GetStaticMesh(OpenableActor)->AddImpulse(-AppliedForce * OpenableActor->GetActorForwardVector());
+			AssetStateMap.Add(OpenableActor, EAssetState::Closed);
+		}
+		return;
 	}
 }
 
@@ -104,6 +128,40 @@ void AMyCharacter::Tick( float DeltaTime )
 {
 	Super::Tick( DeltaTime );
 
+	//Draw a straight line in front of our character
+	Start = MyCharacterCamera->GetComponentLocation();
+	End = Start + MyCharacterCamera->GetForwardVector()*1000.0f;
+	HitObject = FHitResult(ForceInit);
+	GetWorld()->LineTraceSingleByChannel(HitObject, Start, End, ECC_Pawn, TraceParams);
+
+	//Mouse hovered behaviour with an empty hand
+	if (!SelectedObject)
+	{
+		//Turn off the highlight effect when changing to another actor
+		if (HighlightedActor && HitObject.GetActor() != HighlightedActor)
+		{
+			GetStaticMesh(HighlightedActor)->SetRenderCustomDepth(false);
+			HighlightedActor = nullptr;
+		}
+
+		//Check if there is an object blocking the hit and if it is in our hand's range
+		if (HitObject.bBlockingHit && HitObject.Distance < MaxGraspLength)
+		{
+			//Check if the object has interractive behaviour enabled
+			if (AssetStateMap.Contains(HitObject.GetActor()) || ItemMap.Contains(HitObject.GetActor()))
+			{
+				HighlightedActor = HitObject.GetActor();
+				GetStaticMesh(HighlightedActor)->SetRenderCustomDepth(true);
+			}
+		}
+	}
+
+	//Turn of the highlight when using a held in hand
+	else if(HighlightedActor)
+	{
+		GetStaticMesh(HighlightedActor)->SetRenderCustomDepth(false);
+		HighlightedActor = nullptr;
+	}
 }
 
 /*
@@ -174,86 +232,37 @@ void AMyCharacter::SwitchSelectedHand()
 
 void AMyCharacter::Click()
 {
-	FVector Start = MyCharacterCamera->GetComponentLocation();
-	FVector End = Start + MyCharacterCamera->GetForwardVector()*1000.0f;
-
-	FHitResult HitObject = FHitResult(ForceInit);
-
-	GetWorld()->LineTraceSingleByChannel(HitObject, Start, End, ECC_Pawn, TraceParams);
-
-	//Check if player clicked on a valid zone, if not exit the function call
-	if (!HitObject.bBlockingHit)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Not a valid action!"));
-		return;
-	}
-
-	//Check if the object to interact with is not too far away
-	if (HitObject.Distance > MaxGraspLength)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Target is too far away!"));
-		return;
-	}
-
 	//Behaviour when we want to drop the item currently held in hand
 	if (SelectedObject)
 	{
 		//Drops our currently selected item on the surface clicked on
 		DropFromInventory(SelectedObject, HitObject);
-
-		//Remove the reference to the selected object
-		SelectedObject = nullptr;
 	}
 
 	//Behaviour when wanting to grab an item or opening/closing actions
-	else
+	else if(HighlightedActor)
 	{
-		//Check if the player has clicked on a handle
-		if (HitObject.GetActor()->GetName().Contains("Handle"))
-		{
-			SelectedObject = HitObject.GetActor()->GetAttachParentActor();
-		}
-		//Select the object that has been clicked on, or the parent in case it's a handle
-		else
-		{
-			SelectedObject = HitObject.GetActor();
-		}
-
-		//Section for assets which can be opened or closed
-		if (AssetStateMap.Contains(SelectedObject))
-		{
-			GetStaticMesh(SelectedObject->GetComponents());
-
-			if (AssetStateMap.FindRef(SelectedObject) == EAssetState::Closed)
-			{
-				SelectedObjectMesh->AddImpulse(AppliedForce * SelectedObject->GetActorForwardVector());
-				AssetStateMap.Add(SelectedObject, EAssetState::Open);
-			}
-			else if (AssetStateMap.FindRef(SelectedObject) == EAssetState::Open)
-			{
-				SelectedObjectMesh->AddImpulse(-AppliedForce * SelectedObject->GetActorForwardVector());
-				AssetStateMap.Add(SelectedObject, EAssetState::Closed);
-			}
-			SelectedObject = nullptr;
-			return;
-		}
-
 		//Section for items that can be picked up and moved around
-		else if (ItemMap.Contains(SelectedObject))
+		if (ItemMap.Contains(HighlightedActor))
 		{
 			//Picks up the item selected
+			SelectedObject = HighlightedActor;
 			PickToInventory(SelectedObject);
 		}
 
-		//If the item can not pe opened nor moved, remove the reference from it
+		//Section for openable actors
 		else
 		{
-			SelectedObject = nullptr;
+			OpenCloseAction(HighlightedActor);
 		}
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Not a valid action!"));
+		return;
 	}
 }
 
-//Function to pick an item in one of our hands
 void AMyCharacter::PickToInventory(AActor* CurrentObject)
 {
 	//Add a reference and an icon of the object in the correct item slot (left or right hand) 
@@ -277,20 +286,16 @@ void AMyCharacter::PickToInventory(AActor* CurrentObject)
 	CurrentObject->SetActorHiddenInGame(true);
 }
 
-//Function to release the currently held item
 void AMyCharacter::DropFromInventory(AActor* CurrentObject, FHitResult HitSurface)
 {
 	//Set the item visible in the game again
 	CurrentObject->SetActorHiddenInGame(false);
 
-	//Selects the mesh of our object so that we can change it's position in the world
-	GetStaticMesh(CurrentObject->GetComponents());
-
 	//Find the bounding limits of the currently selected object 
-	SelectedObjectMesh->GetLocalBounds(Min, Max);
+	GetStaticMesh(CurrentObject)->GetLocalBounds(Min, Max);
 
 	//Method to move the object to our newly selected position
-	SelectedObjectMesh->SetWorldLocation(HitSurface.Location - HitSurface.Normal*(Min *SelectedObjectMesh->GetComponentScale()));
+	GetStaticMesh(CurrentObject)->SetWorldLocation(HitSurface.Location + HitSurface.Normal*(( - Min) * GetStaticMesh(CurrentObject)->GetComponentScale()));
 
 	//Remove the reference to the object because we are not holding it any more
 	if (bRightHandSelected)
@@ -307,6 +312,9 @@ void AMyCharacter::DropFromInventory(AActor* CurrentObject, FHitResult HitSurfac
 		Remove icon of the object in the inventory slot
 		*/
 	}
+
+	//Remove the reference because we just dropped the item that was selected
+	SelectedObject = nullptr;
 }
 
 /*
