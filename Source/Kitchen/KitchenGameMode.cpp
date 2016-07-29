@@ -9,10 +9,10 @@ AKitchenGameMode::AKitchenGameMode()
 	:Super()
 {
 	//Set the default pawn class to our character
-	DefaultPawnClass = AMyCharacter::StaticClass();
+	//DefaultPawnClass = AMyCharacter::StaticClass();
 
 	//Use our custom HUD class
-	HUDClass = AKitchenHUD::StaticClass();
+	//HUDClass = AKitchenHUD::StaticClass();
 }
 
 

@@ -215,7 +215,7 @@ void AMyCharacter::MoveRight(const float Value)
 	}
 }
 
-void AMyCharacter::SwitchSelectedHand()
+void AMyCharacter::SwitchSelectedHand_Implementation()
 {
 	bRightHandSelected = !bRightHandSelected;
 	if (bRightHandSelected)
@@ -230,7 +230,7 @@ void AMyCharacter::SwitchSelectedHand()
 	}
 }
 
-void AMyCharacter::Click()
+void AMyCharacter::Click_Implementation()
 {
 	//Behaviour when we want to drop the item currently held in hand
 	if (SelectedObject)
@@ -294,6 +294,18 @@ void AMyCharacter::DropFromInventory(AActor* CurrentObject, FHitResult HitSurfac
 	//Find the bounding limits of the currently selected object 
 	GetStaticMesh(CurrentObject)->GetLocalBounds(Min, Max);
 
+
+	/*TODO
+	Rework method by incrementing the Z coordonate of the object by checking whether or not 
+	it is in collision with the surface.
+	
+	Object->SetLocation(HitSurface.Location)
+	while(Object collision with surface)
+	{
+		Object.Position.Z ++;
+	}
+	*/
+
 	//Method to move the object to our newly selected position
 	GetStaticMesh(CurrentObject)->SetWorldLocation(HitSurface.Location + HitSurface.Normal*(( - Min) * GetStaticMesh(CurrentObject)->GetComponentScale()));
 
@@ -301,14 +313,14 @@ void AMyCharacter::DropFromInventory(AActor* CurrentObject, FHitResult HitSurfac
 	if (bRightHandSelected)
 	{
 		RightHandSlot = nullptr;
-		/*	TODO
+		/*	DONE via blueprints
 		Remove icon of the object in the inventory slot
 		*/
 	}
 	else
 	{
 		LeftHandSlot = nullptr;
-		/*	TODO
+		/*	DONE via blueprints
 		Remove icon of the object in the inventory slot
 		*/
 	}
@@ -317,8 +329,10 @@ void AMyCharacter::DropFromInventory(AActor* CurrentObject, FHitResult HitSurfac
 	SelectedObject = nullptr;
 }
 
-/*
-TODO
-Create an inventory!!!!
+/*TODO
+
+	Add functionality to the mouse wheel for rotating the currently held object.
+	Rotation mode to select around which axis the user desires to rotate
+
 */
 

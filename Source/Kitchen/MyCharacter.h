@@ -80,9 +80,11 @@ public:
 	AActor* HighlightedActor;
 
 	//Pointer to the item held in the right hand
+	UPROPERTY(BlueprintReadOnly, VisibleAnywhere)
 	AActor* RightHandSlot;
 
 	//Pointer to the item held in the left hand
+	UPROPERTY(BlueprintReadOnly, VisibleAnywhere)
 	AActor* LeftHandSlot;
 
 	//Parameters for the ray trace
@@ -99,6 +101,7 @@ public:
 	float MaxGraspLength;
 
 	//Variable storing which hand should perform the next action
+	UPROPERTY(BlueprintReadOnly, VisibleAnywhere)
 	bool bRightHandSelected;
 
 	// Input variable for the force applied on the selected object
@@ -124,9 +127,11 @@ protected:
 	void MoveRight(const float Value);
 
 	//Handles the input from the mouse
+	UFUNCTION(BlueprintNativeEvent, Category = "Inputs")
 	void Click();
 
 	//Switches between which hand will perform the next action
+	UFUNCTION(BlueprintNativeEvent, Category = "Inputs")
 	void SwitchSelectedHand();
 
 	//Function which returns the static mesh component of the selected object; NOT efficient --> Look for alternatives
