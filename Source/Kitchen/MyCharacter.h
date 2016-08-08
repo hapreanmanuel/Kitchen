@@ -61,8 +61,15 @@ public:
 	}
 
 	//Camera component for our character
-	UPROPERTY(EditAnywhere)
 	class UCameraComponent* MyCharacterCamera;
+
+	//String used for displaying help messages for the user
+	UPROPERTY(BlueprintReadOnly, VisibleAnywhere)
+	FString DisplayMessage;
+
+	//String used for displaying help messages for the user
+	UPROPERTY(BlueprintReadOnly, VisibleAnywhere)
+	FString DisplayMessage2;
 
 	//Array to store all actors in the world; used to find which object is selected
 	TArray<AActor*> AllActors;
@@ -111,6 +118,21 @@ public:
 	FVector Min;
 	FVector Max;
 
+	//Rotators used for positioning the items held in each hand
+	FRotator RightHandRotator;
+	FRotator LeftHandRotator;
+
+	//Variables to adjust the position of items held
+	float RightZPos;
+	float LeftZPos;
+	float RightYPos;
+	float LeftYPos;
+
+	//Boolean which tells when rotation mode is available
+	bool bRotationModeAllowed;
+	//Integer to store the index of rotation axis
+	int RotationAxisIndex;
+
 protected:
 	/** Base turn rate, in deg/sec. Other scaling may affect final turn rate. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Camera)
@@ -127,11 +149,9 @@ protected:
 	void MoveRight(const float Value);
 
 	//Handles the input from the mouse
-	UFUNCTION(BlueprintNativeEvent, Category = "Inputs")
 	void Click();
 
 	//Switches between which hand will perform the next action
-	UFUNCTION(BlueprintNativeEvent, Category = "Inputs")
 	void SwitchSelectedHand();
 
 	//Function which returns the static mesh component of the selected object; NOT efficient --> Look for alternatives
@@ -145,7 +165,19 @@ protected:
 
 	//Function to open / close drawers and doors
 	void OpenCloseAction(AActor* OpenableActor);
-	
+
+	//Function to switch between the rotation axis each time player presses a key
+	void SwitchRotationAxis();
+
+	//Function to rotate based on the input from mouse wheel
+	void RotateObject(const float Value);
+
+	//Function to move the selected object to the right/left
+	void MoveItemY(const float Value);
+
+	//Function to move the selected object up/down
+	void MoveItemZ(const float Value);
+
 public:
 	/** Returns FirstPersonCameraComponent subobject **/
 	FORCEINLINE class UCameraComponent* GetMyCharacterCamera() const { return MyCharacterCamera; }

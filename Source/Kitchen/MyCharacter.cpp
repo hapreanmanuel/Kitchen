@@ -14,6 +14,10 @@ AMyCharacter::AMyCharacter()
 	// Set this pawn to be controlled by the lowest-numbered player
 	AutoPossessPlayer = EAutoReceiveInput::Player0;
 
+	//Help text to display at the beginig of the game
+	DisplayMessage = TEXT("Use WASD for movement. \nTAB button to switch between which hand to use.");
+	DisplayMessage2 = TEXT("");
+
 	// Set size for collision capsule
 	GetCapsuleComponent()->InitCapsuleSize(5.f, 80.0f);
 
@@ -37,15 +41,29 @@ AMyCharacter::AMyCharacter()
 	TraceParams.bReturnPhysicalMaterial = false;
 
 	//Set the maximum grasping length
-	MaxGraspLength = 300;
+	MaxGraspLength = 150.f;
 
 	//Set the pointers to the items held in hands to null at the begining of the game
 	LeftHandSlot = nullptr;
 	RightHandSlot = nullptr;
 
+	//Set the rotations to null
+	LeftHandRotator = FRotator(0.f, 0.f, 0.f);
+	RightHandRotator = FRotator(0.f, 0.f, 0.f);
+
 	//By default our character will perfom actions with the right hand first
 	bRightHandSelected = true;
 
+	//At the begining we don't hold an item which can be rotated
+	bRotationModeAllowed = false;
+
+	// 1 - Z axis ; 2 - X axis ; 3 - Y axis ; 0 - default rotation disabled
+	RotationAxisIndex = 0;
+
+	RightZPos = 30.f;
+	LeftZPos = 30.f;
+	RightYPos = 20;
+	LeftYPos = 20;
 }
 
 // Called when the game starts or when spawned
@@ -130,7 +148,7 @@ void AMyCharacter::Tick( float DeltaTime )
 
 	//Draw a straight line in front of our character
 	Start = MyCharacterCamera->GetComponentLocation();
-	End = Start + MyCharacterCamera->GetForwardVector()*1000.0f;
+	End = Start + MyCharacterCamera->GetForwardVector()*MaxGraspLength;
 	HitObject = FHitResult(ForceInit);
 	GetWorld()->LineTraceSingleByChannel(HitObject, Start, End, ECC_Pawn, TraceParams);
 
@@ -154,13 +172,54 @@ void AMyCharacter::Tick( float DeltaTime )
 				GetStaticMesh(HighlightedActor)->SetRenderCustomDepth(true);
 			}
 		}
+
+		if (HighlightedActor)
+		{
+			//Print a message to the screen
+			DisplayMessage = TEXT("Press click to interact \n(Grab or Open/Close Action)");
+		}
+		else
+		{
+			//Reset text to empty
+			DisplayMessage = TEXT("Use WASD for movement. \nTAB button to switch between which hand to use.");
+		}
+
+		DisplayMessage2 = TEXT("");
 	}
 
-	//Turn of the highlight when using a held in hand
-	else if(HighlightedActor)
+	//Behaviour for selected object in hand
+	else 
 	{
-		GetStaticMesh(HighlightedActor)->SetRenderCustomDepth(false);
-		HighlightedActor = nullptr;
+		//Turn of the highlight effect because we can't pick up with this hand.
+		if (HighlightedActor)
+		{
+			GetStaticMesh(HighlightedActor)->SetRenderCustomDepth(false);
+			HighlightedActor = nullptr;
+		}
+
+		//Enable the player to access rotation mode
+		bRotationModeAllowed = true;
+
+		if (!RotationAxisIndex)
+		{
+			//Display message to tell user that he can rotate an object
+			DisplayMessage = TEXT("Press R for rotation mode using the mouse wheel\nClick to drop item");
+			DisplayMessage2 = TEXT("You can use the keyboard arrows\nto adjust the position of item in hand");
+		}
+	}
+
+	//Draw object from the right hand
+	if (RightHandSlot)
+	{
+		RightHandSlot->SetActorRotation(RightHandRotator + FRotator(0.f, GetActorRotation().Yaw, 0.f));
+		GetStaticMesh(RightHandSlot)->SetWorldLocation(GetActorLocation() + FVector(20.f, 20.f, 20.f) * GetActorForwardVector() + FVector(RightYPos, RightYPos, RightYPos) * GetActorRightVector() + FVector(0.f, 0.f, RightZPos));
+	}
+
+	//Draw object from the left hand
+	if (LeftHandSlot)
+	{
+		LeftHandSlot->SetActorRotation(LeftHandRotator + FRotator(0.f, GetActorRotation().Yaw, 0.f));
+		GetStaticMesh(LeftHandSlot)->SetWorldLocation(GetActorLocation() + FVector(20.f, 20.f, 20.f) * GetActorForwardVector() - FVector(LeftYPos, LeftYPos, LeftYPos) * GetActorRightVector() + FVector(0.f, 0.f, LeftZPos));
 	}
 }
 
@@ -184,6 +243,16 @@ void AMyCharacter::SetupPlayerInputComponent(class UInputComponent* InputCompone
 
 	////Input from the tab button which switches selected hand
 	InputComponent->BindAction("SwitchSelectedHand", IE_Pressed, this, &AMyCharacter::SwitchSelectedHand);
+
+	//Key to switch between the axis the item turns around
+	InputComponent->BindAction("SwitchRotationAxis", IE_Pressed, this, &AMyCharacter::SwitchRotationAxis);
+
+	//Input from the mouse wheel to rotate the object
+	InputComponent->BindAxis("RotateObject", this, &AMyCharacter::RotateObject);
+
+	//Input frome keyboard arrows
+	InputComponent->BindAxis("MoveItemZ", this, &AMyCharacter::MoveItemZ);
+	InputComponent->BindAxis("MoveItemY", this, &AMyCharacter::MoveItemY);
 }
 
 void AMyCharacter::MoveForward(const float Value)
@@ -215,7 +284,7 @@ void AMyCharacter::MoveRight(const float Value)
 	}
 }
 
-void AMyCharacter::SwitchSelectedHand_Implementation()
+void AMyCharacter::SwitchSelectedHand()
 {
 	bRightHandSelected = !bRightHandSelected;
 	if (bRightHandSelected)
@@ -228,12 +297,15 @@ void AMyCharacter::SwitchSelectedHand_Implementation()
 		SelectedObject = LeftHandSlot;
 		UE_LOG(LogTemp, Warning, TEXT("Our character will perform the next action with his LEFT hand"));
 	}
+
+	//Exit rotation mode
+	RotationAxisIndex = 0;
 }
 
-void AMyCharacter::Click_Implementation()
+void AMyCharacter::Click()
 {
 	//Behaviour when we want to drop the item currently held in hand
-	if (SelectedObject)
+	if (SelectedObject && HitObject.Distance < MaxGraspLength)
 	{
 		//Drops our currently selected item on the surface clicked on
 		DropFromInventory(SelectedObject, HitObject);
@@ -265,49 +337,39 @@ void AMyCharacter::Click_Implementation()
 
 void AMyCharacter::PickToInventory(AActor* CurrentObject)
 {
-	//Add a reference and an icon of the object in the correct item slot (left or right hand) 
+	//Add a reference and an icon of the object in the correct item slot (left or right hand) and save the value of our rotator
 	if (bRightHandSelected)
 	{
 		RightHandSlot = CurrentObject;
+		RightHandRotator = RightHandSlot->GetActorRotation();
 
-		/*	TODO
+		/*	DONE - via Blueprint
 		Add icon of the object in the inventory slot
 		*/
 	}
 	else
 	{
 		LeftHandSlot = CurrentObject;
-		/*	TODO
-		Add icon of the object in the inventory slot
+		LeftHandRotator = LeftHandSlot->GetActorRotation();
+
+		/*	DONE - via Blueprint
+		Add icon of the object in the inventory slot 
 		*/
 	}
 
-	//Hide the object from the world
-	CurrentObject->SetActorHiddenInGame(true);
+	//Set collision to overlap other actors, we set up the GameTraceChannel1 to our custom overlapping collision.
+	//GetStaticMesh(CurrentObject)->SetCollisionObjectType(ECollisionChannel::ECC_GameTraceChannel1);
+	//Deactivate the gravity
+	GetStaticMesh(CurrentObject)->SetEnableGravity(false);
 }
 
 void AMyCharacter::DropFromInventory(AActor* CurrentObject, FHitResult HitSurface)
 {
-	//Set the item visible in the game again
-	CurrentObject->SetActorHiddenInGame(false);
-
 	//Find the bounding limits of the currently selected object 
 	GetStaticMesh(CurrentObject)->GetLocalBounds(Min, Max);
 
-
-	/*TODO
-	Rework method by incrementing the Z coordonate of the object by checking whether or not 
-	it is in collision with the surface.
-	
-	Object->SetLocation(HitSurface.Location)
-	while(Object collision with surface)
-	{
-		Object.Position.Z ++;
-	}
-	*/
-
 	//Method to move the object to our newly selected position
-	GetStaticMesh(CurrentObject)->SetWorldLocation(HitSurface.Location + HitSurface.Normal*(( - Min) * GetStaticMesh(CurrentObject)->GetComponentScale()));
+	GetStaticMesh(CurrentObject)->SetWorldLocation(HitSurface.ImpactPoint + HitSurface.Normal*(( - Min) * GetStaticMesh(CurrentObject)->GetComponentScale()));
 
 	//Remove the reference to the object because we are not holding it any more
 	if (bRightHandSelected)
@@ -316,6 +378,9 @@ void AMyCharacter::DropFromInventory(AActor* CurrentObject, FHitResult HitSurfac
 		/*	DONE via blueprints
 		Remove icon of the object in the inventory slot
 		*/
+		//Reset the positioning vector back to default state
+		RightZPos = 30.f;
+		RightYPos = 20;
 	}
 	else
 	{
@@ -323,16 +388,130 @@ void AMyCharacter::DropFromInventory(AActor* CurrentObject, FHitResult HitSurfac
 		/*	DONE via blueprints
 		Remove icon of the object in the inventory slot
 		*/
+		//Reset the positioning vector back to default state
+		LeftZPos = 30.f;
+		LeftYPos = 20;
 	}
+
+	//Set collision back to physics body
+	//GetStaticMesh(CurrentObject)->SetCollisionObjectType(ECollisionChannel::ECC_PhysicsBody);
+	//Reactivate the gravity
+	GetStaticMesh(CurrentObject)->SetEnableGravity(true);
 
 	//Remove the reference because we just dropped the item that was selected
 	SelectedObject = nullptr;
+
+	//Disable Rotation mode
+	bRotationModeAllowed = false;
+	//Reset rotation index to default 0
+	RotationAxisIndex = 0;
 }
 
-/*TODO
+void AMyCharacter::SwitchRotationAxis()
+{
+	//Exit function call if rotation is not permited here
+	if (!bRotationModeAllowed)
+	{
+		return;
+	}
+	//Increment the index which coresponds to rotation axis
+	RotationAxisIndex++;
 
-	Add functionality to the mouse wheel for rotating the currently held object.
-	Rotation mode to select around which axis the user desires to rotate
+	//Recycle after the third axis
+	if (RotationAxisIndex == 4)
+	{
+		RotationAxisIndex = 1;
+	}
 
-*/
+	//Update display text based on Rotation Axis Index
+	switch (RotationAxisIndex)
+	{
+	case 1:
+		DisplayMessage = TEXT("Rotate about Z axis. R to switch\nClick to drop item");
+		break;
+	case 2:
+		DisplayMessage = TEXT("Rotate about Y axis. R to switch\nClick to drop item");
+		break;
+	case 3:
+		DisplayMessage = TEXT("Rotate about X axis. R to switch\nClick to drop item");
+		break;
+	}
+}
 
+void AMyCharacter::RotateObject(const float Value)
+{
+	//Check if controler is valid, input is not null and that we are in rotation mode
+	if ((Controller != nullptr) && (Value != 0.0f) && RotationAxisIndex)
+	{
+		//Local variable to store the difference gained from the input
+		FRotator RotIncrement;
+
+		//Add value to increment based on the axis
+		switch (RotationAxisIndex)
+		{
+		case 1:
+			RotIncrement = FRotator(0.f, Value*10.f, 0.f);
+			break;
+		case 2:
+			RotIncrement = FRotator(0.f, 0.f, Value*10.f);
+			break;
+		case 3:
+			RotIncrement = FRotator(Value*10.f, 0.f, 0.f);
+			break;
+		default:
+			return;
+		}
+
+		//Add our input to the currently selected object
+		if (bRightHandSelected)
+		{
+			RightHandRotator += RotIncrement;
+		}
+		else
+		{
+			LeftHandRotator += RotIncrement;
+		}
+	}
+}
+
+void AMyCharacter::MoveItemZ(const float Value)
+{
+	if ((Controller != nullptr) && (Value != 0.0f))
+	{
+		if (bRightHandSelected)
+		{
+			if ((Value < 0 && RightZPos > 20) || (Value >0 && RightZPos <40))
+			{
+				RightZPos += Value*0.2f;
+			}
+		}
+		else
+		{
+			if ((Value < 0 && LeftZPos > 20) || (Value >0 && LeftZPos <40))
+			{
+				LeftZPos += Value*0.2f;
+			}
+		}
+	}
+}
+
+void AMyCharacter::MoveItemY(const float Value)
+{
+	if ((Controller != nullptr) && (Value != 0.0f))
+	{
+		if (bRightHandSelected)
+		{
+			if ((Value < 0 && RightYPos > 5) || (Value >0 && RightYPos <25))
+			{
+				RightYPos += Value*0.2f;
+			}
+		}
+		else
+		{
+			if ((Value < 0 && LeftYPos <25) || (Value >0 && LeftYPos >5 ))
+			{
+				LeftYPos -= Value*0.2f;
+			}
+		}
+	}
+}
