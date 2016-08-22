@@ -19,10 +19,10 @@ enum class EItemType : uint8
 	GeneralItem UMETA(DisplayName = "GeneralItem"),
 	Cup UMETA(DisplayName = "Cup"),
 	Plate UMETA(DisplayName = "Plate"),
-	Mug	UMETA(DisplayName = "Plate"),
-	Pan UMETA(DisplayName = "Plate"),
-	Spatula UMETA(DisplayName = "Plate"),
-	Spoon UMETA(DisplayName = "Plate")
+	Mug	UMETA(DisplayName = "Mug"),
+	Pan UMETA(DisplayName = "Pan"),
+	Spatula UMETA(DisplayName = "Spatula"),
+	Spoon UMETA(DisplayName = "Spoon")
 };
 
 #include "GameFramework/Character.h"

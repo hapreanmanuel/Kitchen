@@ -60,6 +60,7 @@ AMyCharacter::AMyCharacter()
 	// 1 - Z axis ; 2 - X axis ; 3 - Y axis ; 0 - default rotation disabled
 	RotationAxisIndex = 0;
 
+	//Offsets for positioning the items held in hand
 	RightZPos = 30.f;
 	LeftZPos = 30.f;
 	RightYPos = 20;
@@ -87,7 +88,7 @@ void AMyCharacter::BeginPlay()
 			{
 				if (!ActorIt->GetName().Contains("Door"))
 				{
-					GetStaticMesh(ActorIt)->AddImpulse(-6 * AppliedForce * ActorIt->GetActorForwardVector());
+					GetStaticMesh(ActorIt)->AddImpulse(-1 * AppliedForce * ActorIt->GetActorForwardVector());
 				}
 				AssetStateMap.Add(ActorIt->GetAttachParentActor(), EAssetState::Closed);
 			}
@@ -161,12 +162,12 @@ void AMyCharacter::Tick( float DeltaTime )
 			GetStaticMesh(HighlightedActor)->SetRenderCustomDepth(false);
 			HighlightedActor = nullptr;
 		}
-
+	
 		//Check if there is an object blocking the hit and if it is in our hand's range
 		if (HitObject.bBlockingHit && HitObject.Distance < MaxGraspLength)
 		{
 			//Check if the object has interractive behaviour enabled
-			if (AssetStateMap.Contains(HitObject.GetActor()) || ItemMap.Contains(HitObject.GetActor()))
+			if (AssetStateMap.Contains(HitObject.GetActor()) || AssetStateMap.Contains(HitObject.GetActor()->GetAttachParentActor()) || ItemMap.Contains(HitObject.GetActor()))
 			{
 				HighlightedActor = HitObject.GetActor();
 				GetStaticMesh(HighlightedActor)->SetRenderCustomDepth(true);
@@ -361,15 +362,26 @@ void AMyCharacter::PickToInventory(AActor* CurrentObject)
 	//GetStaticMesh(CurrentObject)->SetCollisionObjectType(ECollisionChannel::ECC_GameTraceChannel1);
 	//Deactivate the gravity
 	GetStaticMesh(CurrentObject)->SetEnableGravity(false);
+	
+	//Ignore clicking on item if held in hand
+	TraceParams.AddIgnoredComponent(GetStaticMesh(CurrentObject));
 }
 
 void AMyCharacter::DropFromInventory(AActor* CurrentObject, FHitResult HitSurface)
 {
+	if (HitSurface.Distance > MaxGraspLength)
+	{
+		return;
+	}
 	//Find the bounding limits of the currently selected object 
 	GetStaticMesh(CurrentObject)->GetLocalBounds(Min, Max);
 
 	//Method to move the object to our newly selected position
 	GetStaticMesh(CurrentObject)->SetWorldLocation(HitSurface.ImpactPoint + HitSurface.Normal*(( - Min) * GetStaticMesh(CurrentObject)->GetComponentScale()));
+
+	//Reset ignored parameters
+	TraceParams.ClearIgnoredComponents();
+
 
 	//Remove the reference to the object because we are not holding it any more
 	if (bRightHandSelected)
@@ -381,6 +393,12 @@ void AMyCharacter::DropFromInventory(AActor* CurrentObject, FHitResult HitSurfac
 		//Reset the positioning vector back to default state
 		RightZPos = 30.f;
 		RightYPos = 20;
+
+		//Add item in left hand back to ignored actor by line trace
+		if (LeftHandSlot)
+		{
+			TraceParams.AddIgnoredComponent(GetStaticMesh(LeftHandSlot));
+		}
 	}
 	else
 	{
@@ -391,6 +409,12 @@ void AMyCharacter::DropFromInventory(AActor* CurrentObject, FHitResult HitSurfac
 		//Reset the positioning vector back to default state
 		LeftZPos = 30.f;
 		LeftYPos = 20;
+
+		//Add item in right hand back to ignored actor by line trace
+		if (RightHandSlot)
+		{
+			TraceParams.AddIgnoredComponent(GetStaticMesh(RightHandSlot));
+		}
 	}
 
 	//Set collision back to physics body
@@ -482,14 +506,14 @@ void AMyCharacter::MoveItemZ(const float Value)
 		{
 			if ((Value < 0 && RightZPos > 20) || (Value >0 && RightZPos <40))
 			{
-				RightZPos += Value*0.2f;
+				RightZPos += Value*0.35f;
 			}
 		}
 		else
 		{
 			if ((Value < 0 && LeftZPos > 20) || (Value >0 && LeftZPos <40))
 			{
-				LeftZPos += Value*0.2f;
+				LeftZPos += Value*0.35f;
 			}
 		}
 	}
@@ -503,14 +527,14 @@ void AMyCharacter::MoveItemY(const float Value)
 		{
 			if ((Value < 0 && RightYPos > 5) || (Value >0 && RightYPos <25))
 			{
-				RightYPos += Value*0.2f;
+				RightYPos += Value*0.35f;
 			}
 		}
 		else
 		{
 			if ((Value < 0 && LeftYPos <25) || (Value >0 && LeftYPos >5 ))
 			{
-				LeftYPos -= Value*0.2f;
+				LeftYPos -= Value*0.35f;
 			}
 		}
 	}
